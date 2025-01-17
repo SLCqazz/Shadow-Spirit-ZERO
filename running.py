@@ -1,7 +1,7 @@
 import time
 import math
 import numpy as np
-from PCA9685 import PCA9685
+from pca9685 import PCA9685
 from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
 from math import pi, sin, cos, sqrt, atan2, acos
 
@@ -154,10 +154,10 @@ class SpotMicroHardware:
 
         # Servo channel mappings
         self.channels = {
-            'LB': {'hip': 0, 'upper': 1, 'lower': 2},
-            'RB': {'hip': 3, 'upper': 4, 'lower': 5},
-            'LF': {'hip': 6, 'upper': 7, 'lower': 8},
-            'RF': {'hip': 9, 'upper': 10, 'lower': 11}
+            'LB': {'hip': 2, 'upper': 4, 'lower': 3},
+            'RB': {'hip': 13, 'upper': 12, 'lower': 11},
+            'LF': {'hip': 6, 'upper': 7, 'lower': 5},
+            'RF': {'hip': 9, 'upper': 10, 'lower': 8}
         }
 
         # Servo calibration data
