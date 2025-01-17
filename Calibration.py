@@ -145,18 +145,18 @@ if __name__ == '__main__':
 
             # Map servo number to PCA9685 channel
             channel_map = {
-                1: 3,
-                2: 4,
-                3: 5,
-                4: 7,
-                5: 8,
-                6: 10,
-                7: 11,
-                8: 12,
-                9: 2,
-                10: 6,
-                11: 9,
-                12: 13
+                1: 3, #LB lower
+                2: 4, #LB upper
+                3: 5, #LF lower
+                4: 7, #LF upper
+                5: 8, #RF lower
+                6: 10, #RF upper
+                7: 11, #RB lower
+                8: 12, #RB upper
+                9: 2, #LB hip
+                10: 6, #LF hip
+                11: 9, #RF hip
+                12: 13 #RB hip
             }
             selected_channel = channel_map[selected_servo]
 
