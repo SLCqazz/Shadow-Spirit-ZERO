@@ -1,9 +1,9 @@
 import time
-import math
 import numpy as np
 from pca9685 import PCA9685
 from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
 from math import pi, sin, cos, sqrt, atan2, acos
+import keyboard
 
 d2r = pi/180
 r2d = 180/pi
@@ -184,6 +184,14 @@ class SpotMicroHardware:
                 pwm = self.angle_to_pwm(leg, joint, angle)
                 self.pwm.setServoPulse(self.channels[leg][joint], pwm)
 
+def print_angle_matrix(leg_angles):
+    print("\nCurrent Angle Matrix (degrees):")
+    print("    Hip    Upper   Lower")
+    legs = ['RB', 'RF', 'LF', 'LB']
+    for i, leg in enumerate(legs):
+        angles = [angle * r2d for angle in leg_angles[i]]
+        print(f"{leg}: {angles[0]:6.2f} {angles[1]:6.2f} {angles[2]:6.2f}")
+
 def main():
     sm = SpotMicroStickFigure(x=0, y=0.10, z=0, phi=0, theta=0, psi=0)
     gait_controller = BezierGaitController(sm)
@@ -191,12 +199,36 @@ def main():
 
     try:
         while True:
-            # Simulate key presses here or implement actual control method
-            gait_controller.v_x = 0.1  # Example: constant forward motion
-            gait_controller.moving = True
+            # Check for keyboard input
+            if keyboard.is_pressed('up'):
+                gait_controller.v_x = 0.1
+                gait_controller.moving = True
+            elif keyboard.is_pressed('down'):
+                gait_controller.v_x = -0.1
+                gait_controller.moving = True
+            elif keyboard.is_pressed('left'):
+                gait_controller.omega = 0.5
+                gait_controller.moving = True
+            elif keyboard.is_pressed('right'):
+                gait_controller.omega = -0.5
+                gait_controller.moving = True
+            else:
+                gait_controller.v_x = 0
+                gait_controller.omega = 0
+                gait_controller.moving = False
 
-            gait_controller.update(0.05)  # 50ms update interval
-            hardware.set_leg_angles(sm.get_leg_angles())
+            if gait_controller.moving:
+                gait_controller.update(0.05)  # 50ms update interval
+                leg_angles = sm.get_leg_angles()
+            else:
+                # Return to default standby angles without moving the body
+                leg_angles = gait_controller.initial_angles
+
+            hardware.set_leg_angles(leg_angles)
+            
+            # Print the angle matrix
+            print_angle_matrix(leg_angles)
+            
             time.sleep(0.05)
 
     except KeyboardInterrupt:
