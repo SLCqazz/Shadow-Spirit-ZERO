@@ -1,12 +1,11 @@
 import time
 import numpy as np
-from pca9685 import PCA9685
+from PCA9685 import PCA9685
 from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
 from math import pi, sin, cos, sqrt, atan2, acos
-import keyboard
 
-d2r = pi/180
-r2d = 180/pi
+d2r = pi / 180
+r2d = 180 / pi
 
 class BezierGaitController:
     def __init__(self, robot):
@@ -22,6 +21,7 @@ class BezierGaitController:
         self.moving = False
         self.initial_angles = self.get_initial_angles()
         self.command = None
+        self.start_time = None
 
     def get_initial_angles(self):
         return [
@@ -32,7 +32,7 @@ class BezierGaitController:
         ]
 
     def bezier_curve(self, t, P0, P1, P2, P3):
-        return (1-t)**3 * P0 + 3*(1-t)**2 * t * P1 + 3*(1-t) * t**2 * P2 + t**3 * P3
+        return (1 - t)**3 * P0 + 3 * (1 - t)**2 * t * P1 + 3 * (1 - t) * t**2 * P2 + t**3 * P3
 
     def leg_trajectory(self, phase, x_offset, y_offset):
         if not self.moving:
@@ -44,10 +44,10 @@ class BezierGaitController:
             z = self.stance_height
         else:  # Swing phase
             t = (phase - 0.5) * 2
-            P0 = np.array([x_offset - self.step_length/2, y_offset, self.stance_height])
-            P1 = np.array([x_offset - self.step_length/4, y_offset, self.stance_height])
-            P2 = np.array([x_offset + self.step_length/4, y_offset, self.stance_height + self.step_height])
-            P3 = np.array([x_offset + self.step_length/2, y_offset, self.stance_height])
+            P0 = np.array([x_offset - self.step_length / 2, y_offset, self.stance_height])
+            P1 = np.array([x_offset - self.step_length / 4, y_offset, self.stance_height])
+            P2 = np.array([x_offset + self.step_length / 4, y_offset, self.stance_height + self.step_height])
+            P3 = np.array([x_offset + self.step_length / 2, y_offset, self.stance_height])
             point = self.bezier_curve(t, P0, P1, P2, P3)
             x, y, z = point
 
@@ -100,15 +100,15 @@ class BezierGaitController:
         # Adjust angles based on leg side and orientation
         if leg_index in [0, 1]:  # Right legs
             hip_angle = -hip_angle  # Negate for right side
-            knee_angle = pi/2 - knee_angle
+            knee_angle = pi / 2 - knee_angle
             ankle_angle = ankle_angle - pi
         else:  # Left legs
-            knee_angle = knee_angle - pi/2
+            knee_angle = knee_angle - pi / 2
             ankle_angle = pi - ankle_angle
 
         # Clamp angles to reasonable ranges
-        hip_angle = max(min(hip_angle, pi/4), -pi/4)  # Limit hip angle to ±45 degrees
-        knee_angle = max(min(knee_angle, pi/2), -pi/2)
+        hip_angle = max(min(hip_angle, pi / 4), -pi / 4)  # Limit hip angle to ±45 degrees
+        knee_angle = max(min(knee_angle, pi / 2), -pi / 2)
         ankle_angle = max(min(ankle_angle, pi), -pi)
 
         return hip_angle, knee_angle, ankle_angle
@@ -116,9 +116,6 @@ class BezierGaitController:
     def update(self, dt):
         if self.command == 'forward':
             self.v_x = 0.1
-            self.moving = True
-        elif self.command == 'backward':
-            self.v_x = -0.1
             self.moving = True
         elif self.command == 'stop':
             self.v_x = 0
@@ -131,10 +128,10 @@ class BezierGaitController:
                 self.phase -= 1
 
             # Calculate foot positions
-            rf = self.leg_trajectory(self.phase, self.robot.body_length/2, self.robot.body_width/2)
-            lf = self.leg_trajectory((self.phase + 0.5) % 1, self.robot.body_length/2, -self.robot.body_width/2)
-            rb = self.leg_trajectory((self.phase + 0.5) % 1, -self.robot.body_length/2, self.robot.body_width/2)
-            lb = self.leg_trajectory(self.phase, -self.robot.body_length/2, -self.robot.body_width/2)
+            rf = self.leg_trajectory(self.phase, self.robot.body_length / 2, self.robot.body_width / 2)
+            lf = self.leg_trajectory((self.phase + 0.5) % 1, self.robot.body_length / 2, -self.robot.body_width / 2)
+            rb = self.leg_trajectory((self.phase + 0.5) % 1, -self.robot.body_length / 2, self.robot.body_width / 2)
+            lb = self.leg_trajectory(self.phase, -self.robot.body_length / 2, -self.robot.body_width / 2)
 
             # Adjust for forward/backward motion
             motion_adjust = self.v_x * dt
@@ -205,18 +202,19 @@ def print_angle_matrix(leg_angles):
         print(f"{leg}: {angles[0]:6.2f} {angles[1]:6.2f} {angles[2]:6.2f}")
 
 def main():
-    sm = SpotMicroStickFigure(x=0, y=0.10, z=0, phi=0, theta=0, psi=0)
+    sm = SpotMicroStickFigure(x=0, y=0.14, z=0, phi=0, theta=0, psi=0)
     gait_controller = BezierGaitController(sm)
     hardware = SpotMicroHardware()
 
     try:
+        gait_controller.command = 'forward'
+        gait_controller.start_time = time.time()
+
         while True:
-            # Check for keyboard input
-            if keyboard.is_pressed('up'):
-                gait_controller.command = 'forward'
-            elif keyboard.is_pressed('down'):
-                gait_controller.command = 'backward'
-            elif keyboard.is_pressed('s'):
+            current_time = time.time()
+            elapsed_time = current_time - gait_controller.start_time
+
+            if elapsed_time >= 5:
                 gait_controller.command = 'stop'
 
             gait_controller.update(0.05)  # 50ms update interval
