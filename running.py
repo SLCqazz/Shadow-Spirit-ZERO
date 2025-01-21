@@ -21,6 +21,7 @@ class BezierGaitController:
         self.omega = 0
         self.moving = False
         self.initial_angles = self.get_initial_angles()
+        self.command = None
 
     def get_initial_angles(self):
         return [
@@ -113,6 +114,17 @@ class BezierGaitController:
         return hip_angle, knee_angle, ankle_angle
 
     def update(self, dt):
+        if self.command == 'forward':
+            self.v_x = 0.1
+            self.moving = True
+        elif self.command == 'backward':
+            self.v_x = -0.1
+            self.moving = True
+        elif self.command == 'stop':
+            self.v_x = 0
+            self.omega = 0
+            self.moving = False
+
         if self.moving:
             self.phase += self.freq * dt
             if self.phase >= 1:
@@ -162,10 +174,10 @@ class SpotMicroHardware:
 
         # Servo calibration data
         self.calibration = {
-            'LB': {'hip': (1000, -1), 'upper': (2200, 1), 'lower': (1000, -1)},
-            'RB': {'hip': (1000, 1), 'upper': (1100, 1), 'lower': (2100, -1)},
-            'LF': {'hip': (1950, 1), 'upper': (1500, 1), 'lower': (950, -1)},
-            'RF': {'hip': (2100, -1), 'upper': (1150, 1), 'lower': (2000, -1)}
+            'LB': {'hip': (1000, -1), 'upper': (2200, -1), 'lower': (1000, -1)},
+            'RB': {'hip': (1000, 1), 'upper': (1100, -1), 'lower': (2100, -1)},
+            'LF': {'hip': (1950, 1), 'upper': (1500, -1), 'lower': (950, -1)},
+            'RF': {'hip': (2100, -1), 'upper': (1150, -1), 'lower': (2000, -1)}
         }
 
     def angle_to_pwm(self, leg, joint, angle):
@@ -201,24 +213,15 @@ def main():
         while True:
             # Check for keyboard input
             if keyboard.is_pressed('up'):
-                gait_controller.v_x = 0.1
-                gait_controller.moving = True
+                gait_controller.command = 'forward'
             elif keyboard.is_pressed('down'):
-                gait_controller.v_x = -0.1
-                gait_controller.moving = True
-            elif keyboard.is_pressed('left'):
-                gait_controller.omega = 0.5
-                gait_controller.moving = True
-            elif keyboard.is_pressed('right'):
-                gait_controller.omega = -0.5
-                gait_controller.moving = True
-            else:
-                gait_controller.v_x = 0
-                gait_controller.omega = 0
-                gait_controller.moving = False
+                gait_controller.command = 'backward'
+            elif keyboard.is_pressed('s'):
+                gait_controller.command = 'stop'
+
+            gait_controller.update(0.05)  # 50ms update interval
 
             if gait_controller.moving:
-                gait_controller.update(0.05)  # 50ms update interval
                 leg_angles = sm.get_leg_angles()
             else:
                 # Return to default standby angles without moving the body
