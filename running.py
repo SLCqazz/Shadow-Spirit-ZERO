@@ -1,14 +1,9 @@
 # main_gait_control.py
 
 import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.animation as animation
-from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
-from math import pi, sin, cos, sqrt, atan2, acos
 import time
-
-# Import the custom PCA9685 class
+from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
+from math import pi, sqrt, atan2, acos
 from pca9685 import PCA9685
 
 # Constants for angle conversions
@@ -54,10 +49,10 @@ class BezierGaitController:
 
     def get_initial_angles(self):
         return [
-            [0, -30 * d2r, 60 * d2r],  # Right back
-            [0, -30 * d2r, 60 * d2r],  # Right front
-            [0, 30 * d2r, -60 * d2r],  # Left front
-            [0, 30 * d2r, -60 * d2r]   # Left back
+            [0, -30 * d2r, 60 * d2r],  # RB
+            [0, -30 * d2r, 60 * d2r],  # RF
+            [0, 30 * d2r, -60 * d2r],  # LF
+            [0, 30 * d2r, -60 * d2r]   # LB
         ]
 
     def bezier_curve(self, t, P0, P1, P2, P3):
@@ -115,8 +110,8 @@ class BezierGaitController:
                 pulse = self.angle_to_pulse(angle_deg, servo, leg)
                 channel = self.channels[leg][servo]
                 self.pwm.setServoPulse(channel, pulse)
-                if self.robot.pwm.debug:
-                    print(f"Setting {leg} {joint} to pulse {pulse}µs on channel {channel}")
+                # Optional: Print servo PWM settings for debugging
+                # print(f"Setting {leg} {joint} to pulse {pulse}µs on channel {channel}")
 
     def inverse_kinematics(self, x, y, z, leg_index):
         # Leg dimensions
@@ -211,7 +206,12 @@ class BezierGaitController:
             }
 
             # Set leg angles in the robot model
-            self.robot.set_leg_angles([rb_angles_deg, rf_angles_deg, lf_angles_deg, lb_angles_deg])
+            self.robot.set_leg_angles([
+                [rb_angles_deg[0] * d2r, rb_angles_deg[1] * d2r, rb_angles_deg[2] * d2r],
+                [rf_angles_deg[0] * d2r, rf_angles_deg[1] * d2r, rf_angles_deg[2] * d2r],
+                [lf_angles_deg[0] * d2r, lf_angles_deg[1] * d2r, lf_angles_deg[2] * d2r],
+                [lb_angles_deg[0] * d2r, lb_angles_deg[1] * d2r, lb_angles_deg[2] * d2r]
+            ])
 
             # Update PWM signals
             self.update_pca9685(leg_angles)
@@ -231,66 +231,6 @@ class BezierGaitController:
             }
             self.update_pca9685(initial_leg_angles)
 
-def update_pose(frame, sm, gait_controller, lines, angle_lines, angle_data, ax, angle_ax):
-    dt = 0.02  # 20ms per frame (50Hz)
-
-    gait_controller.update(dt)
-
-    # Update robot's pose in the simulation
-    sm.set_absolute_body_pose(sm.ht_body)
-
-    # Get updated leg coordinates
-    coords = sm.get_leg_coordinates()
-
-    # Update body lines
-    body_points = [coord[0] for coord in coords] + [coords[0][0]]
-    lines[0].set_data([p[0] for p in body_points], [p[1] for p in body_points])
-    lines[0].set_3d_properties([p[2] for p in body_points])
-
-    # Update leg lines
-    for i, leg in enumerate(coords):
-        lines[i + 1].set_data([p[0] for p in leg], [p[1] for p in leg])
-        lines[i + 1].set_3d_properties([p[2] for p in leg])
-
-    # Update plot limits based on robot's position
-    ax.set_xlim(sm.x - 0.3, sm.x + 0.3)
-    ax.set_ylim(sm.y - 0.2, sm.y + 0.2)
-
-    # Get and store leg angles
-    leg_angles_deg = {}
-    leg_angles_rad = sm.get_leg_angles()
-    leg_names = ['RB', 'RF', 'LF', 'LB']
-
-    for i, leg in enumerate(leg_names):
-        angles_deg = [angle * r2d for angle in leg_angles_rad[i]]
-        leg_angles_deg[leg] = {
-            'hip': angles_deg[0],
-            'upper': angles_deg[1],
-            'lower': angles_deg[2]
-        }
-        angle_data[i, :] = angles_deg
-
-    # Print angle tuples
-    print(f"\nTime: {frame * dt:.2f}s")
-    print("Leg Angles (degrees):")
-    print("    Hip    Upper   Lower")
-    for leg in leg_names:
-        print(f"{leg}: {leg_angles_deg[leg]['hip']:6.2f} {leg_angles_deg[leg]['upper']:6.2f} {leg_angles_deg[leg]['lower']:6.2f}")
-
-    # Update angle plot
-    for i in range(4):
-        for j in range(3):
-            angle_lines[i * 3 + j].set_data(range(frame + 1), angle_data[:frame + 1, i, j].flatten())
-
-    angle_ax.relim()
-    angle_ax.autoscale_view()
-
-    return lines + angle_lines
-
-def initialize_angle_data():
-    # Initialize angle data for plotting: frames x legs x joints
-    return np.zeros((250, 4, 3))  # Adjust the size as needed
-
 def main():
     # Instantiate SpotMicroStickFigure
     sm = SpotMicroStickFigure(x=0, y=0.1, z=0, phi=0, theta=0, psi=0)
@@ -298,69 +238,53 @@ def main():
     # Create gait controller
     gait_controller = BezierGaitController(sm)
 
-    # Set up the figures and axes
-    fig = plt.figure(figsize=(10, 12))
+    # Time variables
+    dt = 0.02  # 20ms per loop iteration (50Hz)
+    frame = 0
 
-    # 3D Plot for Stick Figure
-    ax = fig.add_subplot(211, projection='3d')
+    try:
+        print("Starting gait control. Press Ctrl+C to stop.")
+        while True:
+            loop_start_time = time.time()
 
-    # Angle Plot
-    angle_ax = fig.add_subplot(212)
+            # Update the gait controller
+            gait_controller.update(dt)
 
-    # Initialize lines for 3D plot
-    lines = [ax.plot([], [], [], 'k-')[0]]  # Body line
-    colors = ['r', 'g', 'b', 'y']
-    for color in colors:
-        lines.append(ax.plot([], [], [], f'{color}-')[0])  # Leg lines
+            # Get current leg angles in degrees
+            leg_angles = gait_controller.robot.get_leg_angles()
+            leg_names = ['RB', 'RF', 'LF', 'LB']
 
-    # Initialize lines for angle plot
-    angle_lines = []
-    leg_names = ['RB', 'RF', 'LF', 'LB']
-    joint_names = ['Hip', 'Upper', 'Lower']
-    for i, leg in enumerate(leg_names):
-        for j, joint in enumerate(joint_names):
-            line, = angle_ax.plot([], [], label=f'{leg} {joint}')
-            angle_lines.append(line)
+            # Print angle tuples
+            current_time = frame * dt
+            print(f"\nTime: {current_time:.2f}s")
+            print("Leg Angles (degrees):")
+            print("    Hip     Upper    Lower")
+            for i, leg in enumerate(leg_names):
+                hip, upper, lower = leg_angles[i]
+                hip_deg = hip * r2d
+                upper_deg = upper * r2d
+                lower_deg = lower * r2d
+                print(f"{leg}: {hip_deg:6.2f} {upper_deg:7.2f} {lower_deg:7.2f}")
 
-    # Set labels and title for 3D plot
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.set_title('SpotMicroStickFigure Bezier Gait')
+            frame += 1
 
-    # Set labels and title for angle plot
-    angle_ax.set_xlabel('Frame')
-    angle_ax.set_ylabel('Angle (degrees)')
-    angle_ax.set_title('Leg Joint Angles')
-    angle_ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+            # Calculate elapsed time and sleep to maintain loop rate
+            elapsed_time = time.time() - loop_start_time
+            sleep_time = dt - elapsed_time
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            else:
+                print("Warning: Loop iteration took longer than expected!")
 
-    # Set initial axis limits
-    ax.set_xlim(-0.3, 0.3)
-    ax.set_ylim(-0.2, 0.2)
-    ax.set_zlim(0, 0.4)
+    except KeyboardInterrupt:
+        print("\nStopping gait control...")
 
-    # Adjust layout to prevent overlap
-    plt.tight_layout()
-
-    # Initialize angle data
-    angle_data = np.zeros((250, 4, 3))  # frames x legs x joints (adjust as needed)
-
-    # Create the animation
-    anim = animation.FuncAnimation(
-        fig,
-        update_pose,
-        frames=250,
-        fargs=(sm, gait_controller, lines, angle_lines, angle_data, ax, angle_ax),
-        interval=20,
-        blit=False
-    )
-
-    plt.show()
-
-    # Cleanup PCA9685 on exit
-    gait_controller.pwm.setPWMFreq(0)  # Turn off PWM by setting frequency to 0
-
-    print("Animation complete. If you can see this, the script has run to completion.")
+    finally:
+        # Optionally, reset servos to initial positions
+        gait_controller.moving = False
+        gait_controller.update(dt)
+        gait_controller.pwm.setPWMFreq(0)  # Turn off PWM by setting frequency to 0
+        print("Gait control stopped and servos turned off.")
 
 if __name__ == "__main__":
     main()
