@@ -2,9 +2,9 @@
 
 import numpy as np
 import time
-from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
 from math import pi, sqrt, atan2, acos
-from pca9685 import PCA9685
+from PCA9685 import PCA9685
+from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
 
 # Constants for angle conversions
 d2r = pi / 180
@@ -18,10 +18,10 @@ class BezierGaitController:
         self.step_height = 0.04
         self.phase = 0
         self.freq = 1.0
-        self.v_x = 0.1  # Set constant forward velocity
+        self.v_x = 0.1  # Set forward velocity
         self.v_y = 0
         self.omega = 0
-        self.moving = True
+        self.moving = False  # Initially not moving
         self.initial_angles = self.get_initial_angles()
 
         # Initialize PCA9685
@@ -172,6 +172,22 @@ class BezierGaitController:
 
         return hip_deg, knee_deg, ankle_deg
 
+    def set_initial_position(self):
+        """
+        Set all servos to the initial stable position.
+        """
+        leg_angles_deg = {
+            'RB': {'hip': self.initial_angles[0][0] * r2d, 'upper': self.initial_angles[0][1] * r2d, 'lower': self.initial_angles[0][2] * r2d},
+            'RF': {'hip': self.initial_angles[1][0] * r2d, 'upper': self.initial_angles[1][1] * r2d, 'lower': self.initial_angles[1][2] * r2d},
+            'LF': {'hip': self.initial_angles[2][0] * r2d, 'upper': self.initial_angles[2][1] * r2d, 'lower': self.initial_angles[2][2] * r2d},
+            'LB': {'hip': self.initial_angles[3][0] * r2d, 'upper': self.initial_angles[3][1] * r2d, 'lower': self.initial_angles[3][2] * r2d}
+        }
+        self.update_pca9685(leg_angles_deg)
+        self.robot.set_leg_angles([
+            [angle * d2r for angle in leg]
+            for leg in self.initial_angles
+        ])
+
     def update(self, dt):
         if self.moving:
             self.phase += self.freq * dt
@@ -184,7 +200,7 @@ class BezierGaitController:
             rb = self.leg_trajectory((self.phase + 0.5) % 1, -self.robot.body_length / 2, self.robot.body_width / 2)
             lb = self.leg_trajectory(self.phase, -self.robot.body_length / 2, -self.robot.body_width / 2)
 
-            # Adjust for forward/backward motion
+            # Adjust for forward motion
             motion_adjust = self.v_x * dt
             rf = (rf[0] + motion_adjust, rf[1], rf[2])
             lf = (lf[0] + motion_adjust, lf[1], lf[2])
@@ -205,7 +221,7 @@ class BezierGaitController:
                 'LB': {'hip': lb_angles_deg[0], 'upper': lb_angles_deg[1], 'lower': lb_angles_deg[2]}
             }
 
-            # Set leg angles in the robot model
+            # Set leg angles in the robot model (assumed to be in radians)
             self.robot.set_leg_angles([
                 [rb_angles_deg[0] * d2r, rb_angles_deg[1] * d2r, rb_angles_deg[2] * d2r],
                 [rf_angles_deg[0] * d2r, rf_angles_deg[1] * d2r, rf_angles_deg[2] * d2r],
@@ -221,15 +237,19 @@ class BezierGaitController:
             self.robot.y += self.v_y * dt
             self.robot.psi += self.omega * dt
         else:
-            self.robot.set_leg_angles(self.initial_angles)
-            # Optionally, set servos to initial positions
-            initial_leg_angles_deg = {
+            # Set to initial angles
+            self.robot.set_leg_angles([
+                [angle * d2r for angle in leg]
+                for leg in self.initial_angles
+            ])
+            # Send initial angles to PWM
+            leg_angles_deg_initial = {
                 'RB': {'hip': self.initial_angles[0][0] * r2d, 'upper': self.initial_angles[0][1] * r2d, 'lower': self.initial_angles[0][2] * r2d},
                 'RF': {'hip': self.initial_angles[1][0] * r2d, 'upper': self.initial_angles[1][1] * r2d, 'lower': self.initial_angles[1][2] * r2d},
                 'LF': {'hip': self.initial_angles[2][0] * r2d, 'upper': self.initial_angles[2][1] * r2d, 'lower': self.initial_angles[2][2] * r2d},
                 'LB': {'hip': self.initial_angles[3][0] * r2d, 'upper': self.initial_angles[3][1] * r2d, 'lower': self.initial_angles[3][2] * r2d}
             }
-            self.update_pca9685(initial_leg_angles)
+            self.update_pca9685(leg_angles_deg_initial)
 
 def main():
     # Instantiate SpotMicroStickFigure
@@ -238,52 +258,66 @@ def main():
     # Create gait controller
     gait_controller = BezierGaitController(sm)
 
-    # Time variables
-    dt = 0.02  # 20ms per loop iteration (50Hz)
-    frame = 0
+    # Initialize to initial position
+    print("Setting initial stable position...")
+    gait_controller.set_initial_position()
+    time.sleep(1)  # 1 second to stabilize
+
+    # Start moving forward
+    print("Starting forward movement...")
+    gait_controller.moving = True
+    start_time = time.time()
 
     try:
-        print("Starting gait control. Press Ctrl+C to stop.")
         while True:
-            loop_start_time = time.time()
+            current_time = time.time()
+            elapsed_time = current_time - start_time
+
+            # After 3 seconds, stop moving
+            if elapsed_time >= 3.0 and gait_controller.moving:
+                print("3 seconds elapsed. Stopping movement and returning to stable position.")
+                gait_controller.moving = False
 
             # Update the gait controller
-            gait_controller.update(dt)
+            gait_controller.update(0.02)  # dt = 20ms
 
-            # Get current leg angles in degrees
-            leg_angles = gait_controller.robot.get_leg_angles()
+            # Get current leg angles in radians
+            leg_angles_rad = sm.get_leg_angles()
             leg_names = ['RB', 'RF', 'LF', 'LB']
 
+            # Convert angles to degrees for printing
+            leg_angles_deg = [
+                [angle * r2d for angle in leg]
+                for leg in leg_angles_rad
+            ]
+
             # Print angle tuples
-            current_time = frame * dt
-            print(f"\nTime: {current_time:.2f}s")
+            time_sec = elapsed_time
+            print(f"\nTime: {time_sec:.2f}s")
             print("Leg Angles (degrees):")
             print("    Hip     Upper    Lower")
             for i, leg in enumerate(leg_names):
-                hip, upper, lower = leg_angles[i]
-                hip_deg = hip * r2d
-                upper_deg = upper * r2d
-                lower_deg = lower * r2d
-                print(f"{leg}: {hip_deg:6.2f} {upper_deg:7.2f} {lower_deg:7.2f}")
+                hip, upper, lower = leg_angles_deg[i]
+                print(f"{leg}: {hip:6.2f} {upper:7.2f} {lower:7.2f}")
 
-            frame += 1
+            # Check if movement has stopped and returned to stable position
+            if not gait_controller.moving and elapsed_time >= 3.0:
+                break
 
-            # Calculate elapsed time and sleep to maintain loop rate
-            elapsed_time = time.time() - loop_start_time
-            sleep_time = dt - elapsed_time
-            if sleep_time > 0:
-                time.sleep(sleep_time)
-            else:
-                print("Warning: Loop iteration took longer than expected!")
+            # Sleep for 20ms to simulate 50Hz control loop
+            time.sleep(0.02)
 
     except KeyboardInterrupt:
-        print("\nStopping gait control...")
+        print("\nStopping gait control due to KeyboardInterrupt...")
 
     finally:
-        # Optionally, reset servos to initial positions
-        gait_controller.moving = False
-        gait_controller.update(dt)
-        gait_controller.pwm.setPWMFreq(0)  # Turn off PWM by setting frequency to 0
+        # Ensure the robot returns to initial stable position
+        if gait_controller.moving:
+            gait_controller.moving = False
+            gait_controller.update(0.02)
+        gait_controller.set_initial_position()
+        # Optionally, stop all PWM signals to servos
+        gait_controller.pwm.setPWMFreq(0)
         print("Gait control stopped and servos turned off.")
 
 if __name__ == "__main__":
