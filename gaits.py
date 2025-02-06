@@ -15,8 +15,8 @@ class SimpleGaitController:
     def __init__(self, robot):
         self.robot = robot
         self.stance_height = -0.16
-        self.step_length = 0.08
-        self.step_height = 0.04
+        self.step_length = 0.1
+        self.step_height = 0.08
         self.phase = 0
         self.freq = 1.0
         self.v_x = 0
@@ -118,7 +118,7 @@ class SimpleGaitController:
             upper_angle = -upper_angle
             knee_angle = -knee_angle
 
-        upper_ratio = 0.7
+        upper_ratio = 0.5
         lower_ratio = 1 - upper_ratio
 
         upper_angle = upper_angle * upper_ratio
@@ -171,7 +171,7 @@ class SimpleGaitController:
             self.set_servo_pulses(pwm_duty_cycles)
 
             self.robot.x += self.v_x * cos(self.robot.psi) * dt
-            self.robot.y += self.v_x * sin(self.robot.psi) * dt
+            self.robot.y += self.v_x * sin(self.robot.psi) * dt   
 
             return pwm_duty_cycles
         else:
@@ -187,11 +187,11 @@ class SimpleGaitController:
         self.moving = any([forward, sideways, turn])
 
 def update_pose(frame, sm, gait_controller, lines, angle_lines, angle_data, ax, angle_ax, start_time):
-    dt = 0.02
+    dt = 0.12
 
     current_time = time.time() - start_time
     if current_time <= 10:
-        gait_controller.set_motion(forward=0.025)
+        gait_controller.set_motion(forward=-0.025)
     else:
         gait_controller.set_motion()
 
