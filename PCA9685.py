@@ -22,7 +22,7 @@ class PCA9685:
         self.address = address
         self.debug = debug
         if (self.debug):
-            print("Reseting PCA9685")
+            print("Resetting PCA9685")
         self.write(self.__MODE1, 0x00)
     
     def write(self, reg, value):
@@ -51,7 +51,7 @@ class PCA9685:
         if (self.debug):
             print("Final pre-scale: %d" % prescale)
 
-        oldmode = self.read(self.__MODE1);
+        oldmode = self.read(self.__MODE1)
         newmode = (oldmode & 0x7F) | 0x10        # sleep
         self.write(self.__MODE1, newmode)        # go to sleep
         self.write(self.__PRESCALE, int(math.floor(prescale)))
@@ -69,8 +69,8 @@ class PCA9685:
             print("channel: %d  LED_ON: %d LED_OFF: %d" % (channel, on, off))
       
     def setServoPulse(self, channel, pulse):
-        "Sets the Servo Pulse,The PWM frequency must be 50HZ"
-        pulse = pulse * 4096 / 20000        # PWM frequency is 50HZ, the period is 20000us
+        "Sets the Servo Pulse, The PWM frequency must be 330HZ"
+        pulse = pulse * 4096 / 3030.3  # PWM frequency is 330HZ, the period is 3030.3us
         self.setPWM(channel, 0, int(pulse))
 
     def rampServo(self, channel, target_pulse, steps, delay):
