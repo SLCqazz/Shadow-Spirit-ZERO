@@ -5,25 +5,11 @@ import matplotlib.animation as animation
 from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
 from math import pi, sin, cos, sqrt, atan2, acos
 import time
-from pca9685 import PCA9685
+from PCA9685 import PCA9685
 
 # Conversion constants
 d2r = pi / 180
 r2d = 180 / pi
-
-class LowerLegAdjuster:
-    def __init__(self):
-        self.right_adjustment = 10 * d2r
-        self.left_adjustment = -10 * d2r
-
-    def adjust_lower_leg_angle(self, leg, phase):
-        swing_phase = 0.4
-        if phase < swing_phase:
-            if leg in ['RF', 'RB']:
-                return self.right_adjustment
-            elif leg in ['LF', 'LB']:
-                return self.left_adjustment
-        return 0
 
 class SimpleGaitController:
     def __init__(self, robot):
@@ -38,7 +24,6 @@ class SimpleGaitController:
         self.omega = 0
         self.moving = False
         self.initial_angles = self.get_initial_angles()
-        self.lower_leg_adjuster = LowerLegAdjuster()
 
         self.servo_mappings = {
             'RB': {'hip': (1500, -1), 'upper': (1500, -1), 'lower': (1500, -1)},
@@ -103,10 +88,9 @@ class SimpleGaitController:
             z = self.stance_height
             x = self.step_length * (1 - t)
 
-        lower_angle_adjustment = self.lower_leg_adjuster.adjust_lower_leg_angle(leg, phase)
-        return x, y, z, hip_angle, lower_angle_adjustment
+        return x, y, z, hip_angle
 
-    def inverse_kinematics(self, x, y, z, leg_index, hip_angle, lower_angle_adjustment):
+    def inverse_kinematics(self, x, y, z, leg_index, hip_angle):
         l1 = self.robot.hip_length
         l2 = self.robot.upper_leg_length
         l3 = self.robot.lower_leg_length
@@ -133,8 +117,6 @@ class SimpleGaitController:
         if leg_index in [2, 3]:
             upper_angle = -upper_angle
             knee_angle = -knee_angle
-
-        knee_angle += lower_angle_adjustment
 
         hip_angle = max(min(hip_angle, self.max_angles['hip']), -self.max_angles['hip'])
         upper_angle = max(min(upper_angle, self.max_angles['upper']), -self.max_angles['upper'])
@@ -173,10 +155,10 @@ class SimpleGaitController:
             phases = {leg: (self.phase + self.phase_offsets[leg]) % 1 for leg in ['RB', 'RF', 'LF', 'LB']}
             foot_positions = {leg: self.leg_trajectory(phases[leg], leg) for leg in ['RB', 'RF', 'LF', 'LB']}
 
-            rb_angles = self.inverse_kinematics(*foot_positions['RB'][:3], 0, foot_positions['RB'][3], foot_positions['RB'][4])
-            rf_angles = self.inverse_kinematics(*foot_positions['RF'][:3], 1, foot_positions['RF'][3], foot_positions['RF'][4])
-            lf_angles = self.inverse_kinematics(*foot_positions['LF'][:3], 2, foot_positions['LF'][3], foot_positions['LF'][4])
-            lb_angles = self.inverse_kinematics(*foot_positions['LB'][:3], 3, foot_positions['LB'][3], foot_positions['LB'][4])
+            rb_angles = self.inverse_kinematics(*foot_positions['RB'][:3], 0, foot_positions['RB'][3])
+            rf_angles = self.inverse_kinematics(*foot_positions['RF'][:3], 1, foot_positions['RF'][3])
+            lf_angles = self.inverse_kinematics(*foot_positions['LF'][:3], 2, foot_positions['LF'][3])
+            lb_angles = self.inverse_kinematics(*foot_positions['LB'][:3], 3, foot_positions['LB'][3])
 
             self.robot.set_leg_angles([rb_angles, rf_angles, lf_angles, lb_angles])
             pwm_duty_cycles = self.calculate_pwm_duty_cycles([rb_angles, rf_angles, lf_angles, lb_angles])
