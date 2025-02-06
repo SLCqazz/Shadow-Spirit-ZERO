@@ -51,8 +51,8 @@ class SimpleGaitController:
         self.turn_radius = 0.2
 
         # Initialize PCA9685
-        self.pca = PCA9685(address=0x40, debug=False)
-        self.pca.setPWMFreq(50)  # Set frequency to 50Hz
+        self.pwm = PCA9685(address=0x40, debug=False)
+        self.pwm.setPWMFreq(330)  # Set frequency to 50Hz
 
         # Servo channel mappings
         self.channels = {
@@ -150,7 +150,7 @@ class SimpleGaitController:
         for leg, joints in self.channels.items():
             for joint, channel in joints.items():
                 pulse = pwm_duty_cycles[f"{leg}_{joint}"]
-                self.pca.setServoPulse(channel, pulse)
+                self.pwm.setServoPulse(channel, pulse)
 
     def update(self, dt):
         if self.moving:
