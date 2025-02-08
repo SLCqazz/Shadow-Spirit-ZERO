@@ -48,11 +48,34 @@ pwm_per_degree = 1000.0 / 90.0
 pwm = PCA9685(address=0x40, debug=False)
 pwm.setPWMFreq(330)  # Set frequency to 330Hz
 
+def get_initial_angles():
+    return [
+        [0, -45 * d2r, 60 * d2r],  # RB
+        [0, -45 * d2r, 60 * d2r],  # RF
+        [0, 45 * d2r, -60 * d2r],  # LF
+        [0, 45 * d2r, -60 * d2r]   # LB
+    ]
+
 def angle_to_pwm(leg_name, joint_name, angle):
     center_pwm, direction = servo_mappings[leg_name][joint_name]
     angle_deg = degrees(angle)
     pwm = center_pwm + direction * angle_deg * pwm_per_degree
     return int(pwm)
+
+def set_initial_position():
+    initial_angles = get_initial_angles()
+    leg_names = ['RB', 'RF', 'LF', 'LB']
+    joint_names = ['hip', 'upper', 'lower']
+    
+    for i, leg_angles in enumerate(initial_angles):
+        leg_name = leg_names[i]
+        print(f"{leg_name}:")
+        for j, angle in enumerate(leg_angles):
+            joint_name = joint_names[j]
+            pwm_value = angle_to_pwm(leg_name, joint_name, angle)
+            channel = channels[leg_name][joint_name]
+            pwm.setServoPulse(channel, pwm_value)
+            print(f"  {joint_name}: {round(degrees(angle), 2)}° - PWM: {pwm_value} - Channel: {channel}")
 
 def update_pose_and_servos():
     # Update body position and orientation
@@ -64,16 +87,19 @@ def update_pose_and_servos():
 
         # Get and print leg angles and PWM values
         leg_angles = sm.get_leg_angles()
+        initial_angles = get_initial_angles()
         print("\nLeg Angles (degrees) and PWM values:")
         leg_names = ['RB', 'RF', 'LF', 'LB']
         joint_names = ['hip', 'upper', 'lower']
         for i, angles in enumerate(leg_angles):
             print(f"{leg_names[i]}:")
             for j, angle in enumerate(angles):
-                pwm_value = angle_to_pwm(leg_names[i], joint_names[j], angle)
+                # Add the initial angle to the calculated angle
+                adjusted_angle = angle + initial_angles[i][j]
+                pwm_value = angle_to_pwm(leg_names[i], joint_names[j], adjusted_angle)
                 channel = channels[leg_names[i]][joint_names[j]]
                 pwm.setServoPulse(channel, pwm_value)
-                print(f"  {joint_names[j]}: {round(degrees(angle), 2)}° - PWM: {pwm_value} - Channel: {channel}")
+                print(f"  {joint_names[j]}: {round(degrees(adjusted_angle), 2)}° - PWM: {pwm_value} - Channel: {channel}")
     
     except ValueError as e:
         print(f"Invalid pose: {e}")
@@ -104,7 +130,11 @@ roll, pitch, yaw = 0, 0, 0
 step = 0.005
 angle_step = 1 * pi / 180  # 1 degree
 
-print("Commands:")
+# Set initial position
+print("Setting initial position...")
+set_initial_position()
+
+print("\nCommands:")
 print("w/s: Move in y direction")
 print("a/d: Move in x direction")
 print("q/e: Move in z direction")
