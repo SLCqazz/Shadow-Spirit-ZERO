@@ -3,6 +3,9 @@ from math import pi, degrees
 from spot_micro_kinematics.spot_micro_stick_figure import SpotMicroStickFigure
 from spot_micro_kinematics.utilities import transformations
 from pca9685 import PCA9685
+import sys
+import tty
+import termios
 
 # Constants
 d2r = pi / 180
@@ -75,6 +78,26 @@ def update_pose_and_servos():
     except ValueError as e:
         print(f"Invalid pose: {e}")
 
+def getch():
+    """Gets a single character from standard input. Does not echo to the screen."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+def get_key():
+    """Gets a key press and returns the key code."""
+    ch1 = getch()
+    if ch1 == '\x1b':
+        ch2 = getch()
+        ch3 = getch()
+        return ch1 + ch2 + ch3
+    return ch1
+
 # Initial pose
 x, y, z = 0, 0.18, 0
 roll, pitch, yaw = 0, 0, 0
@@ -82,33 +105,32 @@ step = 0.005
 angle_step = 1 * pi / 180  # 1 degree
 
 print("Commands:")
-print("x+/x-: Move in x direction")
-print("y+/y-: Move in y direction")
-print("z+/z-: Move in z direction")
-print("r+/r-: Roll")
-print("p+/p-: Pitch")
-print("w+/w-: Yaw")
-print("q: Quit")
+print("w/s: Move in y direction")
+print("a/d: Move in x direction")
+print("q/e: Move in z direction")
+print("j/l: Roll")
+print("i/k: Pitch")
+print("u/o: Yaw")
+print("x: Quit")
 
 while True:
-    command = input("Enter command: ").lower()
+    key = get_key()
     
-    if command == 'q':
+    if key == 'x':
         break
-    elif command == 'x+': x += step
-    elif command == 'x-': x -= step
-    elif command == 'y+': y += step
-    elif command == 'y-': y -= step
-    elif command == 'z+': z += step
-    elif command == 'z-': z -= step
-    elif command == 'r+': roll += angle_step
-    elif command == 'r-': roll -= angle_step
-    elif command == 'p+': pitch += angle_step
-    elif command == 'p-': pitch -= angle_step
-    elif command == 'w+': yaw += angle_step
-    elif command == 'w-': yaw -= angle_step
+    elif key == 'w': y += step
+    elif key == 's': y -= step
+    elif key == 'a': x -= step
+    elif key == 'd': x += step
+    elif key == 'q': z += step
+    elif key == 'e': z -= step
+    elif key == 'j': roll -= angle_step
+    elif key == 'l': roll += angle_step
+    elif key == 'i': pitch += angle_step
+    elif key == 'k': pitch -= angle_step
+    elif key == 'u': yaw -= angle_step
+    elif key == 'o': yaw += angle_step
     else:
-        print("Invalid command")
         continue
     
     update_pose_and_servos()
