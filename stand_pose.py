@@ -31,7 +31,7 @@ servo_mappings = {
     'LB': {'hip': (1000, -1), 'upper': (2200, -1), 'lower': (1000, -1)},
     'RB': {'hip': (1000, 1), 'upper': (1100, -1), 'lower': (2100, -1)},
     'LF': {'hip': (1950, 1), 'upper': (1500, -1), 'lower': (950, -1)},
-    'RF': {'hip': (2100, -1), 'upper': (1150, -1), 'lower': (2000, -1)}
+    'RF': {'hip': (2100, -1), 'upper': (1350, -1), 'lower': (1900, -1)}
 }
 
 # Servo channel mappings
