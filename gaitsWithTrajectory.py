@@ -165,9 +165,28 @@ class SimpleGaitController:
 
         return [rb_angles, rf_angles, lf_angles, lb_angles], pwm_duty_cycles, foot_positions
 
+    def initialize_position(self):
+        print("Initializing position...")
+        initial_angles = self.get_initial_angles()
+        
+        # Set upper angles first
+        upper_angles = [[0, angles[1], 0] for angles in initial_angles]
+        pwm_duty_cycles = self.calculate_pwm_duty_cycles(upper_angles)
+        self.set_servo_pulses(pwm_duty_cycles)
+        print("Upper angles set. Waiting 1 second...")
+        time.sleep(1)
+
+        # Set lower angles
+        pwm_duty_cycles = self.calculate_pwm_duty_cycles(initial_angles)
+        self.set_servo_pulses(pwm_duty_cycles)
+        print("Lower angles set. Initialization complete.")
+
 def main():
     sm = SpotMicroStickFigure(x=0, y=0.16, z=0, phi=0, theta=0, psi=0)
     gait_controller = SimpleGaitController(sm)
+
+    # Initialize position
+    gait_controller.initialize_position()
 
     try:
         while True:
