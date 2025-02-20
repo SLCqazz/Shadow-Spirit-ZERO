@@ -27,8 +27,6 @@ class SimpleGaitController:
     def __init__(self, robot):
         self.robot = robot
         self.stance_height = 0.14
-        self.step_length = 0.04
-        self.step_height = 0.04
         self.phase = 0
         self.freq = 1.0
         self.direction = 0  # 0 for stationary, 1 for forward, -1 for backward
@@ -71,12 +69,20 @@ class SimpleGaitController:
             'RF': {'hip': 9, 'upper': 10, 'lower': 8}
         }
 
-        # Add individual leg parameters
+        # Individual leg parameters
         self.leg_params = {
             'RB': {'step_length': 0.04, 'step_height': 0.04},
             'RF': {'step_length': 0.04, 'step_height': 0.04},
             'LF': {'step_length': 0.04, 'step_height': 0.04},
             'LB': {'step_length': 0.04, 'step_height': 0.04}
+        }
+
+        # Stance angle bias (in degrees)
+        self.stance_angle_bias = {
+            'RB': 0,
+            'RF': 2,  # Slightly raise RF during stance
+            'LF': 0,
+            'LB': 2   # Slightly raise LB during stance
         }
 
     def get_initial_angles(self):
@@ -108,7 +114,7 @@ class SimpleGaitController:
                 z = self.stance_height + step_height * sin(pi * t_scaled)
                 x = 0
             else:
-                z = self.stance_height
+                z = self.stance_height + self.stance_angle_bias[leg] * 0.001  # Convert degrees to meters
                 x = 0
         else:  # 前进或后退
             if reversed_phase < swing_phase:
@@ -118,7 +124,7 @@ class SimpleGaitController:
                 x = self.direction * step_length * (1 - cos(pi * t_scaled)) / 2
             else:
                 t = (reversed_phase - swing_phase) / stance_phase
-                z = self.stance_height
+                z = self.stance_height + self.stance_angle_bias[leg] * 0.001  # Convert degrees to meters
                 x = self.direction * step_length * (0.5 - t)
 
         y = 0  # 假设没有横向运动
@@ -242,27 +248,14 @@ class SimpleGaitController:
     def stay_stationary(self):
         self.direction = 0
 
-def adjust_rb_params(gait_controller):
-    print("\nAdjusting RB leg parameters:")
-    step_length = float(input("Enter new step length for RB (current: {}): ".format(gait_controller.leg_params['RB']['step_length'])))
-    step_height = float(input("Enter new step height for RB (current: {}): ".format(gait_controller.leg_params['RB']['step_height'])))
-    
-    gait_controller.leg_params['RB']['step_length'] = step_length
-    gait_controller.leg_params['RB']['step_height'] = step_height
-    print("RB leg parameters updated.")
-
 def main():
     sm = SpotMicroStickFigure(x=0, y=0.16, z=0, phi=0, theta=0, psi=0)
     gait_controller = SimpleGaitController(sm)
-
-    # Initialize position
-    #gait_controller.initialize_position()
 
     print("Use arrow keys to control the robot:")
     print("Up: Move forward")
     print("Down: Move backward")
     print("Space: Stay stationary")
-    print("R: Adjust RB leg parameters")
     print("Q: Quit")
 
     try:
@@ -279,8 +272,6 @@ def main():
             elif key == ' ':  # Space
                 gait_controller.stay_stationary()
                 print("Staying stationary")
-            elif key == 'r':  # Adjust RB leg parameters
-                adjust_rb_params(gait_controller)
 
             leg_angles, pwm_duty_cycles, foot_positions = gait_controller.update()
 
