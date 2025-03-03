@@ -27,12 +27,26 @@ class SimpleGaitController:
     def __init__(self, robot):
         self.robot = robot
         self.stance_height = 0.14
-        self.step_length = 0.04
-        self.step_height = 0.04
         self.freq = 1.0
         self.direction = 0  # 0 for stationary, 1 for forward, -1 for backward
         self.initial_angles = self.get_initial_angles()
         self.initial_foot_positions = self.get_initial_foot_positions()
+
+        # Individual leg parameters
+        self.leg_params = {
+            'RB': {'step_length': 0.04, 'step_height': 0.04},
+            'RF': {'step_length': 0.04, 'step_height': 0.04},
+            'LF': {'step_length': 0.04, 'step_height': 0.04},
+            'LB': {'step_length': 0.04, 'step_height': 0.04}
+        }
+
+        # Stance angle bias (in degrees)
+        self.stance_angle_bias = {
+            'RB': 0,
+            'RF': 2,  # Slightly raise RF during stance
+            'LF': 0,
+            'LB': 2   # Slightly raise LB during stance
+        }
 
         self.servo_mappings = {
             'LB': {'hip': (1000, -1), 'upper': (2320, -1), 'lower': (950, -1)},
@@ -91,25 +105,29 @@ class SimpleGaitController:
         # 反转相位
         reversed_phase = (phase + 0.5) % 1.0
 
+        step_length = self.leg_params[leg]['step_length']
+        step_height = self.leg_params[leg]['step_height']
+        stance_bias = self.stance_angle_bias[leg] * d2r
+
         if self.direction == 0:  # 原地踏步
             if reversed_phase < swing_phase:
                 t = reversed_phase / swing_phase
                 t_scaled = t**a
-                z = self.stance_height + self.step_height * math.sin(math.pi * t_scaled)
+                z = self.stance_height + step_height * math.sin(math.pi * t_scaled)
                 x = 0
             else:
-                z = self.stance_height
+                z = self.stance_height + math.sin(stance_bias)
                 x = 0
         else:  # 前进或后退
             if reversed_phase < swing_phase:
                 t = reversed_phase / swing_phase
                 t_scaled = t**a
-                z = self.stance_height + self.step_height * math.sin(math.pi * t_scaled)
-                x = self.direction * self.step_length * (1 - math.cos(math.pi * t_scaled)) / 2
+                z = self.stance_height + step_height * math.sin(math.pi * t_scaled)
+                x = self.direction * step_length * (1 - math.cos(math.pi * t_scaled)) / 2
             else:
                 t = (reversed_phase - swing_phase) / stance_phase
-                z = self.stance_height
-                x = self.direction * self.step_length * (0.5 - t)
+                z = self.stance_height + math.sin(stance_bias)
+                x = self.direction * step_length * (0.5 - t)
 
         y = 0  # 假设没有横向运动
         hip_angle = 0  # 假设hip角度保持不变
